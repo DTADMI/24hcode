@@ -13,6 +13,8 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.text.MessageFormat;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -41,7 +43,7 @@ public class DetectionController extends Application {
 	private final static int TIME_BETWEEN_ACQUING_TOUR_ON_GOING = 100;
 
 	private final static String DROIT_FOLDER = "C:\\Users\\k008196\\Downloads\\testDroitStream";
-	private final static String HAUT_FOLDER = "";
+	private final static String HAUT_FOLDER = "C:\\Users\\k008196\\Downloads\\testHautStream";
 
 	private boolean onGoingTour = false;
 
@@ -59,6 +61,29 @@ public class DetectionController extends Application {
 
 	private DetectionMapper mapper;
 
+	Comparator<File> fileComparator = new Comparator<File>() {
+		@Override
+		public int compare(File o1, File o2) {
+			int n1 = extractNumber(o1.getName());
+			int n2 = extractNumber(o2.getName());
+			return n1 - n2;
+		}
+
+		private int extractNumber(String name) {
+			int i = 0;
+			try {
+				int s = name.indexOf('g') + 1;
+				int e = name.lastIndexOf('.');
+				String number = name.substring(s, e);
+				i = Integer.parseInt(number);
+			} catch (Exception e) {
+				i = 0; // if filename does not match the format
+						// then default to 0
+			}
+			return i;
+		}
+	};
+
 	public static void main(String[] args) {
 		launch(args);
 	}
@@ -68,93 +93,63 @@ public class DetectionController extends Application {
 
 			@Override
 			public void run() {
-				try {
-					WatchService watcher = FileSystems.getDefault().newWatchService();
-					detectionDroit.setRef(null);
-
-					Path dir = Paths.get(DROIT_FOLDER);
-					dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
-					dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
-					while (onGoingTour) {
-						WatchKey key;
+				File[] files = new File(DROIT_FOLDER).listFiles();
+				Arrays.sort(files, fileComparator);
+				while (onGoingTour) {
+					File[] newFiles = new File(DROIT_FOLDER).listFiles();
+					Arrays.sort(newFiles, fileComparator);
+					int diff = newFiles.length - files.length;
+					for (int i = newFiles.length - diff; i < newFiles.length; i++) {
 						try {
-							key = watcher.take();
-						} catch (InterruptedException ex) {
-							return;
-						}
+							System.out.println("Read " + newFiles[i]);
+							BufferedImage image = ImageIO.read(newFiles[i]);
+							if (detectionDroit.getRef() == null) {
+								detectionDroit.setRef(image);
+							} else {
+								final List<DetectionLine> points2 = detectionDroit.getPoints(image);
+								if (points2 != null)
+									for (DetectionLine dl : points2) {
+										mapper.addLineDectionDroit(dl);
+									}
+								Platform.runLater(new Runnable() {
 
-						for (WatchEvent<?> event : key.pollEvents()) {
-							WatchEvent.Kind<?> kind = event.kind();
-
-							@SuppressWarnings("unchecked")
-							WatchEvent<Path> ev = (WatchEvent<Path>) event;
-							final Path fileName = ev.context();
-
-							System.out.println(kind.name() + ": " + fileName);
-
-							if (kind == ENTRY_MODIFY && fileName.toString().endsWith("png")) {
-								new Thread() {
+									@Override
 									public void run() {
-										try {
-											RandomAccessFile raf = new RandomAccessFile(fileName.toFile(), "r");
-											raf.getChannel().lock();
+										imageViewDroit.setImage(SwingFXUtils.toFXImage(image, null));
+									}
+								});
+								if (points2 != null) {
+									Platform.runLater(new Runnable() {
 
-
-											BufferedImage image = ImageIO.read(fileName.toFile());
-											if (detectionDroit.getRef() == null) {
-												detectionDroit.setRef(image);
-											} else {
-												final List<DetectionLine> points2 = detectionDroit.getPoints(image);
-												if (points2 != null)
-													for (DetectionLine dl : points2) {
-														mapper.addLineDectionDroit(dl);
+										@Override
+										public void run() {
+											for (DetectionLine points : points2) {
+												Point2D previousPoint = null;
+												for (Point2D p : points.getPoints()) {
+													if (previousPoint != null) {
+														gcDroit.strokeLine(previousPoint.getX(), previousPoint.getY(),
+																p.getX(), p.getY());
 													}
-												Platform.runLater(new Runnable() {
-
-													@Override
-													public void run() {
-														imageViewDroit.setImage(SwingFXUtils.toFXImage(image, null));
-													}
-												});
-												if (points2 != null) {
-													Platform.runLater(new Runnable() {
-
-														@Override
-														public void run() {
-															for (DetectionLine points : points2) {
-																Point2D previousPoint = null;
-																for (Point2D p : points.getPoints()) {
-																	if (previousPoint != null) {
-																		gcDroit.strokeLine(previousPoint.getX(),
-																				previousPoint.getY(), p.getX(),
-																				p.getY());
-																	}
-																	previousPoint = p;
-																}
-															}
-														}
-													});
-
+													previousPoint = p;
 												}
 											}
-										} catch (IOException e) {
-											e.printStackTrace();
 										}
-									}
+									});
 
-								}.start();
+								}
 							}
-
-							boolean valid = key.reset();
-							if (!valid) {
-								break;
-							}
+						} catch (IOException e) {
+							e.printStackTrace();
 						}
 					}
-				} catch (IOException x) {
-					System.err.println(x);
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					files = newFiles;
 				}
-
 			}
 		};
 	}
@@ -164,83 +159,63 @@ public class DetectionController extends Application {
 
 			@Override
 			public void run() {
-				try {
-					WatchService watcher = FileSystems.getDefault().newWatchService();
-					detectionHaut.setRef(null);
-
-					Path dir = Paths.get(HAUT_FOLDER);
-					dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
-					dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
-					while (onGoingTour) {
-						WatchKey key;
+				File[] files = new File(HAUT_FOLDER).listFiles();
+				Arrays.sort(files, fileComparator);
+				while (onGoingTour) {
+					File[] newFiles = new File(HAUT_FOLDER).listFiles();
+					Arrays.sort(newFiles, fileComparator);
+					int diff = newFiles.length - files.length;
+					for (int i = newFiles.length - diff; i < newFiles.length; i++) {
 						try {
-							key = watcher.take();
-						} catch (InterruptedException ex) {
-							return;
-						}
-
-						for (WatchEvent<?> event : key.pollEvents()) {
-							WatchEvent.Kind<?> kind = event.kind();
-
-							@SuppressWarnings("unchecked")
-							WatchEvent<Path> ev = (WatchEvent<Path>) event;
-							Path fileName = ev.context();
-
-							System.out.println(kind.name() + ": " + fileName);
-
-							if (kind == ENTRY_MODIFY && fileName.toString().endsWith("png")) {
-								try {
-									BufferedImage image = ImageIO.read(fileName.toFile());
-									if (detectionHaut.getRef() == null) {
-										detectionHaut.setRef(image);
-									} else {
-										final List<DetectionLine> points2 = detectionHaut.getPoints(image);
-										if (points2 != null)
-											for (DetectionLine dl : points2) {
-												mapper.addLineDectionHaut(dl);
-											}
-										Platform.runLater(new Runnable() {
-
-											@Override
-											public void run() {
-												imageViewHaut.setImage(SwingFXUtils.toFXImage(image, null));
-											}
-										});
-										if (points2 != null) {
-											Platform.runLater(new Runnable() {
-
-												@Override
-												public void run() {
-													for (DetectionLine points : points2) {
-														Point2D previousPoint = null;
-														for (Point2D p : points.getPoints()) {
-															if (previousPoint != null) {
-																gcHaut.strokeLine(previousPoint.getX(),
-																		previousPoint.getY(), p.getX(), p.getY());
-															}
-															previousPoint = p;
-														}
-													}
-												}
-											});
-
-										}
+							System.out.println("Read " + newFiles[i]);
+							BufferedImage image = ImageIO.read(newFiles[i]);
+							if (detectionHaut.getRef() == null) {
+								detectionHaut.setRef(image);
+							} else {
+								final List<DetectionLine> points2 = detectionHaut.getPoints(image);
+								if (points2 != null)
+									for (DetectionLine dl : points2) {
+										mapper.addLineDectionHaut(dl);
 									}
-								} catch (IOException e) {
-									e.printStackTrace();
+								Platform.runLater(new Runnable() {
+
+									@Override
+									public void run() {
+										imageViewHaut.setImage(SwingFXUtils.toFXImage(image, null));
+									}
+								});
+								if (points2 != null) {
+									Platform.runLater(new Runnable() {
+
+										@Override
+										public void run() {
+											for (DetectionLine points : points2) {
+												Point2D previousPoint = null;
+												for (Point2D p : points.getPoints()) {
+													if (previousPoint != null) {
+														gcHaut.strokeLine(previousPoint.getX(), previousPoint.getY(),
+																p.getX(), p.getY());
+													}
+													previousPoint = p;
+												}
+											}
+										}
+									});
+
 								}
 							}
-						}
-
-						boolean valid = key.reset();
-						if (!valid) {
-							break;
+						} catch (IOException e) {
+							e.printStackTrace();
 						}
 					}
-				} catch (IOException x) {
-					System.err.println(x);
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					files = newFiles;
 				}
-
 			}
 		};
 	}
@@ -390,7 +365,7 @@ public class DetectionController extends Application {
 	public void sendScore(int total, int tour1, int tour2, int tour3) {
 		try {
 			sendGetRequest(MessageFormat.format(
-					"http://24hcode_git_flechettes/retournejson/newresultat/{0}.{1}.{2}.{3}", Integer.toString(total),
+					"http://24hcode/retournejson/newresultat/{0}.{1}.{2}.{3}", Integer.toString(total),
 					Integer.toString(tour1), Integer.toString(tour2), Integer.toString(tour3)));
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -399,16 +374,15 @@ public class DetectionController extends Application {
 	}
 
 	public boolean isTourOnGoing() {
-		// String response;
-		// try {
-		// response =
-		// sendGetRequest("http://24hcode_git_flechettes/retournejson/statutlancer");
-		// } catch (IOException e) {
-		// e.printStackTrace();
-		// return false;
-		// }
-		// return response.contains("\"statut\":\"1\"");
-		return true;
+		String response;
+		try {
+			response = sendGetRequest("http://24hcode/retournejson/statutlancer");
+			System.out.println(response);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
+		}
+		return response.contains("\"statut\":\"1\"");
 	}
 
 	@Override
