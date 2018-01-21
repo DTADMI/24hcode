@@ -14,29 +14,24 @@ public class DetectionImageHaut extends DetectionImage {
 		roiWidth = 749;
 		roiHeight = 223;
 		distanceCamera = 44.5;
-		factorCamera = 18.0;
-		middleTargetImageX = 758;
+		factorCamera = 16.50;
+		middleTargetImageX = 643;
 		middleTargetImageY = 393;
 	}
 
 	@Override
 	public Point2D getProjection(double position) {
-		double centerScreen = imageWidth / 2.0;
-		double positionRelativeToScreen = position - centerScreen;
-		double positionRelativeToScreenCm = positionRelativeToScreen / getHorizontalFactorCamera();
-
-		double deltaXWithTarget = positionRelativeToScreenCm;
-
-		double offsetCenter = getOffsetCameraToTargetCenterReal().getY();
 		Point2D cameraPosition = getCameraPosition();
-		Point2D targetPositionEstimated = new Point2D(offsetCenter + deltaXWithTarget, 0);
-		return targetPositionEstimated.subtract(cameraPosition).normalize();
+		double offsetCenter = getOffsetCameraToTargetCenterReal().getX();
+		double offset = position / factorCamera;
+		Point2D centerImageOnTarget = new Point2D(offsetCenter + offset, 0);
+		return centerImageOnTarget.subtract(cameraPosition).normalize();
 
 	}
 
 	@Override
 	public Point2D getCameraPosition() {
-		double offsetCenter = getOffsetCameraToTargetCenterReal().getY();
+		double offsetCenter = getOffsetCameraToTargetCenterReal().getX();
 		return new Point2D(offsetCenter, distanceCamera);
 	}
 }
