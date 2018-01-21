@@ -6,10 +6,12 @@ import javafx.geometry.Point2D;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Slider;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 public class Main2 extends Application {
@@ -29,7 +31,7 @@ public class Main2 extends Application {
 		primaryStage.setWidth(1300);
 		primaryStage.setHeight(750);
 
-		Pane pane = new Pane();
+		VBox pane = new VBox();
 
 		ImageView image = new ImageView(
 				new Image(new FileInputStream("C:\\Users\\k008196\\Downloads\\Img\\CAM-DROITE-JPG11.jpg")));
@@ -44,6 +46,28 @@ public class Main2 extends Application {
 			}
 		});
 		pane.getChildren().add(image);
+
+		Slider slider = new Slider();
+		slider.setValue(imageDroit.distanceCamera);
+		slider.setMin(0);
+		slider.setMax(100);
+		slider.valueProperty().addListener((observable) -> {
+			imageDroit.distanceCamera = slider.getValue();
+			System.out.println(imageDroit.distanceCamera + " " + imageDroit.distanceCamera);
+			draw();
+		});
+		pane.getChildren().add(slider);
+
+		Slider slider2 = new Slider();
+		slider2.setValue(imageDroit.factorCamera);
+		slider2.setMin(0);
+		slider2.setMax(100);
+		slider2.valueProperty().addListener((observable) -> {
+			imageDroit.factorCamera = slider2.getValue();
+			System.out.println(imageDroit.factorCamera + " " + imageDroit.factorCamera);
+			draw();
+		});
+		pane.getChildren().add(slider2);
 
 		Scene scene = new Scene(pane);
 		primaryStage.setScene(scene);
@@ -74,23 +98,22 @@ public class Main2 extends Application {
 
 		gc.strokeOval(-17 * ratio, (gc.getCanvas().getHeight() / 2.0) - (17 * ratio), 17 * 2 * ratio, 17 * 2 * ratio);
 		// gc.strokeOval(0, 0, canvas.getHeight(), canvas.getHeight());
-		Point2D cameraPosition = new Point2D((imageDroit.distanceCamera * ratio), gc.getCanvas().getHeight() / 2.0)
-				.subtract(0, imageDroit.getOffsetCameraToTargetCenterReal().getX() * ratio);
+		Point2D cameraPosition = imageDroit.getCameraPosition();
 		// gc.strokeOval(cameraPosition.getX(), cameraPosition.getY(), 5, 5);
 
 		Point2D projectedPositionMin = cameraPosition
-				.add(imageDroit.getProjection(0).multiply(imageDroit.distanceCamera * ratio));
+				.add(imageDroit.getProjection(-640).multiply(imageDroit.distanceCamera * ratio));
 		gc.strokeLine(cameraPosition.getX(), cameraPosition.getY(), projectedPositionMin.getX(),
 				projectedPositionMin.getY());
 
 		Point2D projectedPositionMax = cameraPosition
-				.add(imageDroit.getProjection(1280).multiply(imageDroit.distanceCamera * ratio));
+				.add(imageDroit.getProjection(640).multiply(imageDroit.distanceCamera * ratio));
 		gc.strokeLine(cameraPosition.getX(), cameraPosition.getY(), projectedPositionMax.getX(),
 				projectedPositionMax.getY());
 
 		if (mousePosition != null) {
-			Point2D projectedPosition = cameraPosition
-					.add(imageDroit.getProjection(mousePosition.getX()).multiply(imageDroit.distanceCamera * ratio));
+			Point2D projectedPosition = cameraPosition.add(
+					imageDroit.getProjection(mousePosition.getX() - 640).multiply(imageDroit.distanceCamera * ratio));
 			// System.out.println(cameraPosition + " " + projectedPosition);
 			gc.strokeLine(cameraPosition.getX(), cameraPosition.getY(), projectedPosition.getX(),
 					projectedPosition.getY());
